@@ -19,6 +19,7 @@ import facenet
 import pickle
 import random
 import tensorflow.contrib.eager as tfe
+import align.detect_face
 
 songs = ['1.mp4', '2.mp4']
 img_w_dis = 100
@@ -334,91 +335,129 @@ class MyWindow(QMainWindow):
                        MyWindow.STATUS_PAUSE,
                        MyWindow.STATUS_PLAYING)[self.status]
 
-    def detectFace(self, img, threshold):
+    def detectFace(self, img):
 
-        caffe_img = (img.copy() - 127.5) / 127.5
-        origin_h, origin_w, ch = caffe_img.shape
-        scales = tools.calculateScales(img)
-        out = []
-        t0 = time.time()
-        # del scales[:4]
+        # caffe_img = (img.copy() - 127.5) / 127.5
+        # origin_h, origin_w, ch = caffe_img.shape
+        # scales = tools.calculateScales(img)
+        # out = []
+        # t0 = time.time()
+        # # del scales[:4]
+        #
+        # for scale in scales:
+        #     hs = int(origin_h * scale)
+        #     ws = int(origin_w * scale)
+        #     scale_img = cv2.resize(caffe_img, (ws, hs))
+        #     input = scale_img.reshape(1, *scale_img.shape)
+        #     ouput = self.Pnet.predict(input)  # .transpose(0,2,1,3) should add, but seems after process is wrong then.
+        #     out.append(ouput)
+        # image_num = len(scales)
+        # rectangles = []
+        # for i in range(image_num):
+        #     cls_prob = out[i][0][0][:, :,
+        #                1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
+        #     roi = out[i][1][0]
+        #     out_h, out_w = cls_prob.shape
+        #     out_side = out_w
+        #     if out_h > out_w:
+        #         out_side = out_h
+        #     # out_side = max(out_h, out_w)
+        #     # print('calculating img scale #:', i)
+        #     cls_prob = np.swapaxes(cls_prob, 0, 1)
+        #     roi = np.swapaxes(roi, 0, 2)
+        #     rectangle = tools.detect_face_12net(cls_prob, roi, out_side, 1 / scales[i], origin_w, origin_h,
+        #                                         threshold[0])
+        #     rectangles.extend(rectangle)
+        # rectangles = tools.NMS(rectangles, 0.7, 'iou')
+        #
+        # t1 = time.time()
+        # print('time for 12 net is: ', t1 - t0)
+        #
+        # if len(rectangles) == 0:
+        #     return rectangles
+        #
+        # crop_number = 0
+        # out = []
+        # predict_24_batch = []
+        # for rectangle in rectangles:
+        #     crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
+        #     scale_img = cv2.resize(crop_img, (24, 24))
+        #     predict_24_batch.append(scale_img)
+        #     crop_number += 1
+        #
+        # predict_24_batch = np.array(predict_24_batch)
+        #
+        # out = self.Rnet.predict(predict_24_batch)
+        #
+        # cls_prob = out[0]  # first 0 is to select cls, second batch number, always =0
+        # cls_prob = np.array(cls_prob)  # convert to numpy
+        # roi_prob = out[1]  # first 0 is to select roi, second batch number, always =0
+        # roi_prob = np.array(roi_prob)
+        # rectangles = tools.filter_face_24net(cls_prob, roi_prob, rectangles, origin_w, origin_h, threshold[1])
+        # t2 = time.time()
+        # print('time for 24 net is: ', t2 - t1)
+        #
+        # if len(rectangles) == 0:
+        #     return rectangles
+        #
+        # crop_number = 0
+        # predict_batch = []
+        # for rectangle in rectangles:
+        #     # print('calculating net 48 crop_number:', crop_number)
+        #     crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
+        #     scale_img = cv2.resize(crop_img, (48, 48))
+        #     predict_batch.append(scale_img)
+        #     crop_number += 1
+        #
+        # predict_batch = np.array(predict_batch)
+        #
+        # output = self.Onet.predict(predict_batch)
+        # cls_prob = output[0]
+        # roi_prob = output[1]
+        # pts_prob = output[2]  # index
+        # rectangles = tools.filter_face_48net(cls_prob, roi_prob, pts_prob, rectangles, origin_w, origin_h, threshold[2])
+        # t3 = time.time()
+        # print('time for 48 net is: ', t3 - t2)
+        #
+        # return rectangles
+        print('Creating networks and loading parameters')
+        aa = []
+        with tf.Graph().as_default():
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0)
+            sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+            with sess.as_default():
+                pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
 
-        for scale in scales:
-            hs = int(origin_h * scale)
-            ws = int(origin_w * scale)
-            scale_img = cv2.resize(caffe_img, (ws, hs))
-            input = scale_img.reshape(1, *scale_img.shape)
-            ouput = self.Pnet.predict(input)  # .transpose(0,2,1,3) should add, but seems after process is wrong then.
-            out.append(ouput)
-        image_num = len(scales)
-        rectangles = []
-        for i in range(image_num):
-            cls_prob = out[i][0][0][:, :,
-                       1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
-            roi = out[i][1][0]
-            out_h, out_w = cls_prob.shape
-            out_side = out_w
-            if out_h > out_w:
-                out_side = out_h
-            # out_side = max(out_h, out_w)
-            # print('calculating img scale #:', i)
-            cls_prob = np.swapaxes(cls_prob, 0, 1)
-            roi = np.swapaxes(roi, 0, 2)
-            rectangle = tools.detect_face_12net(cls_prob, roi, out_side, 1 / scales[i], origin_w, origin_h,
-                                                threshold[0])
-            rectangles.extend(rectangle)
-        rectangles = tools.NMS(rectangles, 0.7, 'iou')
+        minsize = 20  # minimum size of face
+        threshold = [0.6, 0.7, 0.7]  # three steps's threshold
+        factor = 0.709  # scale factor
+        random_key = np.random.randint(0, high=99999)
+        if img.ndim == 2:
+            img = facenet.to_rgb(img)
+        img = img[:, :, 0:3]
+        bounding_boxes, _ = align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
+        nrof_faces = bounding_boxes.shape[0]
+        if nrof_faces > 0:
+            det = bounding_boxes[:, 0:4]
+            det_arr = []
+            img_size = np.asarray(img.shape)[0:2]
+            if nrof_faces > 1:
+                for i in range(nrof_faces):
+                    det_arr.append(np.squeeze(det[i]))
+            else:
+                det_arr.append(np.squeeze(det))
 
-        t1 = time.time()
-        print('time for 12 net is: ', t1 - t0)
-
-        if len(rectangles) == 0:
-            return rectangles
-
-        crop_number = 0
-        out = []
-        predict_24_batch = []
-        for rectangle in rectangles:
-            crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
-            scale_img = cv2.resize(crop_img, (24, 24))
-            predict_24_batch.append(scale_img)
-            crop_number += 1
-
-        predict_24_batch = np.array(predict_24_batch)
-
-        out = self.Rnet.predict(predict_24_batch)
-
-        cls_prob = out[0]  # first 0 is to select cls, second batch number, always =0
-        cls_prob = np.array(cls_prob)  # convert to numpy
-        roi_prob = out[1]  # first 0 is to select roi, second batch number, always =0
-        roi_prob = np.array(roi_prob)
-        rectangles = tools.filter_face_24net(cls_prob, roi_prob, rectangles, origin_w, origin_h, threshold[1])
-        t2 = time.time()
-        print('time for 24 net is: ', t2 - t1)
-
-        if len(rectangles) == 0:
-            return rectangles
-
-        crop_number = 0
-        predict_batch = []
-        for rectangle in rectangles:
-            # print('calculating net 48 crop_number:', crop_number)
-            crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
-            scale_img = cv2.resize(crop_img, (48, 48))
-            predict_batch.append(scale_img)
-            crop_number += 1
-
-        predict_batch = np.array(predict_batch)
-
-        output = self.Onet.predict(predict_batch)
-        cls_prob = output[0]
-        roi_prob = output[1]
-        pts_prob = output[2]  # index
-        rectangles = tools.filter_face_48net(cls_prob, roi_prob, pts_prob, rectangles, origin_w, origin_h, threshold[2])
-        t3 = time.time()
-        print('time for 48 net is: ', t3 - t2)
-
-        return rectangles
+            for i, det in enumerate(det_arr):
+                det = np.squeeze(det)
+                bb = np.zeros(4, dtype=np.int32)
+                bb[0] = np.maximum(det[0], 0)
+                bb[1] = np.maximum(det[1], 0)
+                bb[2] = np.minimum(det[2], img_size[1])
+                bb[3] = np.minimum(det[3], img_size[0])  # 坐标
+                # cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]  # mtcnn生成的照片
+                # scaled = misc.imresize(cropped, (160, 160), interp='bilinear')
+                aa.append(bb)
+        return aa
 
     def prewhiten(self, x):
         mean = np.mean(x)
@@ -524,7 +563,7 @@ class MyWindow(QMainWindow):
     # 逻辑：播放识别
     def music(self, songs, frame):
         self.lock.acquire()
-        rectangles = self.detectFace(frame, self.threshold)
+        rectangles = self.detectFace(frame)
         frame = self.rectangleDraw(rectangles, frame)
         print(songs[0])
         # for x in songs:
