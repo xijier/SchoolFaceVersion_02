@@ -18,8 +18,10 @@ import os
 import facenet
 import pickle
 import random
-import tensorflow.contrib.eager as tfe
+import tools_matrix as tools
 import align.detect_face
+from scipy import misc
+import validate_twopics as vt
 
 songs = ['1.mp4', '2.mp4']
 img_w_dis = 100
@@ -60,8 +62,8 @@ class MyWindow(QMainWindow):
         self.cameraConfig = cameraConfigDia()
         self.createStatusbar()
         self.createMenu()
-        self.pre =  0.0
-
+        self.pre = 0.0
+        self.img_stack = []
         self.threshold = [0.6, 0.6, 0.7]
         self.video_url = video_url
         self.video_type = video_type  # 0: offline  1: realTime
@@ -328,130 +330,91 @@ class MyWindow(QMainWindow):
                        MyWindow.STATUS_PAUSE,
                        MyWindow.STATUS_PLAYING)[self.status]
 
-    def detectFace(self, img):
+    def detectFace(self, img,threshold):
 
-        # caffe_img = (img.copy() - 127.5) / 127.5
-        # origin_h, origin_w, ch = caffe_img.shape
-        # scales = tools.calculateScales(img)
-        # out = []
-        # t0 = time.time()
-        # # del scales[:4]
-        #
-        # for scale in scales:
-        #     hs = int(origin_h * scale)
-        #     ws = int(origin_w * scale)
-        #     scale_img = cv2.resize(caffe_img, (ws, hs))
-        #     input = scale_img.reshape(1, *scale_img.shape)
-        #     ouput = self.Pnet.predict(input)  # .transpose(0,2,1,3) should add, but seems after process is wrong then.
-        #     out.append(ouput)
-        # image_num = len(scales)
-        # rectangles = []
-        # for i in range(image_num):
-        #     cls_prob = out[i][0][0][:, :,
-        #                1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
-        #     roi = out[i][1][0]
-        #     out_h, out_w = cls_prob.shape
-        #     out_side = out_w
-        #     if out_h > out_w:
-        #         out_side = out_h
-        #     # out_side = max(out_h, out_w)
-        #     # print('calculating img scale #:', i)
-        #     cls_prob = np.swapaxes(cls_prob, 0, 1)
-        #     roi = np.swapaxes(roi, 0, 2)
-        #     rectangle = tools.detect_face_12net(cls_prob, roi, out_side, 1 / scales[i], origin_w, origin_h,
-        #                                         threshold[0])
-        #     rectangles.extend(rectangle)
-        # rectangles = tools.NMS(rectangles, 0.7, 'iou')
-        #
-        # t1 = time.time()
-        # print('time for 12 net is: ', t1 - t0)
-        #
-        # if len(rectangles) == 0:
-        #     return rectangles
-        #
-        # crop_number = 0
-        # out = []
-        # predict_24_batch = []
-        # for rectangle in rectangles:
-        #     crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
-        #     scale_img = cv2.resize(crop_img, (24, 24))
-        #     predict_24_batch.append(scale_img)
-        #     crop_number += 1
-        #
-        # predict_24_batch = np.array(predict_24_batch)
-        #
-        # out = self.Rnet.predict(predict_24_batch)
-        #
-        # cls_prob = out[0]  # first 0 is to select cls, second batch number, always =0
-        # cls_prob = np.array(cls_prob)  # convert to numpy
-        # roi_prob = out[1]  # first 0 is to select roi, second batch number, always =0
-        # roi_prob = np.array(roi_prob)
-        # rectangles = tools.filter_face_24net(cls_prob, roi_prob, rectangles, origin_w, origin_h, threshold[1])
-        # t2 = time.time()
-        # print('time for 24 net is: ', t2 - t1)
-        #
-        # if len(rectangles) == 0:
-        #     return rectangles
-        #
-        # crop_number = 0
-        # predict_batch = []
-        # for rectangle in rectangles:
-        #     # print('calculating net 48 crop_number:', crop_number)
-        #     crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
-        #     scale_img = cv2.resize(crop_img, (48, 48))
-        #     predict_batch.append(scale_img)
-        #     crop_number += 1
-        #
-        # predict_batch = np.array(predict_batch)
-        #
-        # output = self.Onet.predict(predict_batch)
-        # cls_prob = output[0]
-        # roi_prob = output[1]
-        # pts_prob = output[2]  # index
-        # rectangles = tools.filter_face_48net(cls_prob, roi_prob, pts_prob, rectangles, origin_w, origin_h, threshold[2])
-        # t3 = time.time()
-        # print('time for 48 net is: ', t3 - t2)
-        #
-        # return rectangles
-        print('Creating networks and loading parameters')
-        aa = []
-        with tf.Graph().as_default():
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0)
-            sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
-            with sess.as_default():
-                pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+        caffe_img = (img.copy() - 127.5) / 127.5
+        origin_h, origin_w, ch = caffe_img.shape
+        scales = tools.calculateScales(img)
+        out = []
+        t0 = time.time()
+        # del scales[:4]
 
-        minsize = 20  # minimum size of face
-        threshold = [0.6, 0.7, 0.7]  # three steps's threshold
-        factor = 0.709  # scale factor
-        random_key = np.random.randint(0, high=99999)
-        if img.ndim == 2:
-            img = facenet.to_rgb(img)
-        img = img[:, :, 0:3]
-        bounding_boxes, _ = align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
-        nrof_faces = bounding_boxes.shape[0]
-        if nrof_faces > 0:
-            det = bounding_boxes[:, 0:4]
-            det_arr = []
-            img_size = np.asarray(img.shape)[0:2]
-            if nrof_faces > 1:
-                for i in range(nrof_faces):
-                    det_arr.append(np.squeeze(det[i]))
-            else:
-                det_arr.append(np.squeeze(det))
+        for scale in scales:
+            hs = int(origin_h * scale)
+            ws = int(origin_w * scale)
+            scale_img = cv2.resize(caffe_img, (ws, hs))
+            input = scale_img.reshape(1, *scale_img.shape)
+            ouput = self.Pnet.predict(input)  # .transpose(0,2,1,3) should add, but seems after process is wrong then.
+            out.append(ouput)
+        image_num = len(scales)
+        rectangles = []
+        for i in range(image_num):
+            cls_prob = out[i][0][0][:, :,
+                       1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
+            roi = out[i][1][0]
+            out_h, out_w = cls_prob.shape
+            out_side = out_w
+            if out_h > out_w:
+                out_side = out_h
+            # out_side = max(out_h, out_w)
+            # print('calculating img scale #:', i)
+            cls_prob = np.swapaxes(cls_prob, 0, 1)
+            roi = np.swapaxes(roi, 0, 2)
+            rectangle = tools.detect_face_12net(cls_prob, roi, out_side, 1 / scales[i], origin_w, origin_h,
+                                                threshold[0])
+            rectangles.extend(rectangle)
+        rectangles = tools.NMS(rectangles, 0.7, 'iou')
 
-            for i, det in enumerate(det_arr):
-                det = np.squeeze(det)
-                bb = np.zeros(4, dtype=np.int32)
-                bb[0] = np.maximum(det[0], 0)
-                bb[1] = np.maximum(det[1], 0)
-                bb[2] = np.minimum(det[2], img_size[1])
-                bb[3] = np.minimum(det[3], img_size[0])  # 坐标
-                # cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]  # mtcnn生成的照片
-                # scaled = misc.imresize(cropped, (160, 160), interp='bilinear')
-                aa.append(bb)
-        return aa
+        t1 = time.time()
+        print('time for 12 net is: ', t1 - t0)
 
+        if len(rectangles) == 0:
+            return rectangles
+
+        crop_number = 0
+        out = []
+        predict_24_batch = []
+        for rectangle in rectangles:
+            crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
+            scale_img = cv2.resize(crop_img, (24, 24))
+            predict_24_batch.append(scale_img)
+            crop_number += 1
+
+        predict_24_batch = np.array(predict_24_batch)
+
+        out = self.Rnet.predict(predict_24_batch)
+
+        cls_prob = out[0]  # first 0 is to select cls, second batch number, always =0
+        cls_prob = np.array(cls_prob)  # convert to numpy
+        roi_prob = out[1]  # first 0 is to select roi, second batch number, always =0
+        roi_prob = np.array(roi_prob)
+        rectangles = tools.filter_face_24net(cls_prob, roi_prob, rectangles, origin_w, origin_h, threshold[1])
+        t2 = time.time()
+        print('time for 24 net is: ', t2 - t1)
+
+        if len(rectangles) == 0:
+            return rectangles
+
+        crop_number = 0
+        predict_batch = []
+        for rectangle in rectangles:
+            # print('calculating net 48 crop_number:', crop_number)
+            crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
+            scale_img = cv2.resize(crop_img, (48, 48))
+            predict_batch.append(scale_img)
+            crop_number += 1
+
+        predict_batch = np.array(predict_batch)
+
+        output = self.Onet.predict(predict_batch)
+        cls_prob = output[0]
+        roi_prob = output[1]
+        pts_prob = output[2]  # index
+        rectangles = tools.filter_face_48net(cls_prob, roi_prob, pts_prob, rectangles, origin_w, origin_h, threshold[2])
+        t3 = time.time()
+        print('time for 48 net is: ', t3 - t2)
+
+        return rectangles
     def prewhiten(self, x):
         mean = np.mean(x)
         std = np.std(x)
@@ -526,37 +489,63 @@ class MyWindow(QMainWindow):
                     continue
                 cv2.rectangle(draw, (int(rectangle[0]), int(rectangle[1])), (int(rectangle[2]), int(rectangle[3])),
                               (255, 0, 0), 1)
-                start = time.time()
-                rec_name = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别，暂时注掉
-                end = time.time()
-                print(str(end - start))
-                crop_img = imutils.resize(crop_img, width=100)
-                height, width = crop_img.shape[:2]
-                temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
-                temp_pixmap = QPixmap.fromImage(temp_image)
-                # 加消息队列线程实现图片更新
-                # self.imgeLabel_1.setPixmap(temp_pixmap)
+                if not self.img_stack:
+                    self.img_stack.append(crop_img)
+                    rec_name = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
+                    crop_img = imutils.resize(crop_img, width=100)
+                    height, width = crop_img.shape[:2]
+                    temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
+                    temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis , img_w_dis )
+                    # 加消息队列线程实现图片更新
+                    # self.imgeLabel_1.setPixmap(temp_pixmap)
 
-                item = self.q_recognize.get()
-                # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
-                # layoutbox.removeWidget(QLabel)
-                imageLabel_img = item.findChild(QLabel, "image")
-                imageLabel_img.setPixmap(temp_pixmap)
-                imageLabel_name = item.findChild(QLabel, "name")
-                imageLabel_name.setText(rec_name)
-                imageLabel_id = item.findChild(QLabel, "id")
-                imageLabel_id.setText(rec_name)
-                imageLabel_rate = item.findChild(QLabel, "rate")
-                rec_rate = random.randint(70, 96) / 100;
-                imageLabel_rate.setText(str(rec_rate))
-                self.q_recognize.put(item)
-                # cv2.imwrite('data/' + str(self.threadID) + 'test.jpg', crop_img)
+                    item = self.q_recognize.get()
+                    # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
+                    # layoutbox.removeWidget(QLabel)
+                    imageLabel_img = item.findChild(QLabel, "image")
+                    imageLabel_img.setPixmap(temp_pixmap)
+                    imageLabel_name = item.findChild(QLabel, "name")
+                    imageLabel_name.setText(rec_name)
+                    imageLabel_id = item.findChild(QLabel, "id")
+                    imageLabel_id.setText(rec_name)
+                    imageLabel_rate = item.findChild(QLabel, "rate")
+                    #rec_rate = random.randint(70, 96) / 100;
+                    #imageLabel_rate.setText(str(rec_rate))
+                    self.q_recognize.put(item)
+                else:
+                    pic_temp = self.img_stack.pop()
+                    vt_result = vt.classify_gray_hist(pic_temp, crop_img)
+                    print("czg vt_result is %f" % vt_result)
+                    self.img_stack.append(crop_img)
+                    if vt_result < 0.7:
+                        rec_name = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
+                        crop_img = imutils.resize(crop_img, width=100)
+                        height, width = crop_img.shape[:2]
+                        temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
+                        temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
+                        # 加消息队列线程实现图片更新
+                        #self.imgeLabel_1.setPixmap(temp_pixmap)
+
+                        item = self.q_recognize.get()
+                        # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
+                        # layoutbox.removeWidget(QLabel)
+                        imageLabel_img = item.findChild(QLabel, "image")
+                        imageLabel_img.setPixmap(temp_pixmap)
+                        imageLabel_name = item.findChild(QLabel, "name")
+                        imageLabel_name.setText(rec_name)
+                        imageLabel_id = item.findChild(QLabel, "id")
+                        imageLabel_id.setText(rec_name)
+                        imageLabel_rate = item.findChild(QLabel, "rate")
+                        #rec_rate = random.randint(70, 96)/100;
+                        #imageLabel_rate.setText(str(rec_rate))
+                        self.q_recognize.put(item)
+
         return draw
 
     # 逻辑：播放识别
     def music(self, songs, frame):
         self.lock.acquire()
-        rectangles = self.detectFace(frame)
+        rectangles = self.detectFace(frame, self.threshold)
         frame = self.rectangleDraw(rectangles, frame)
         print(songs[0])
         # for x in songs:
@@ -682,12 +671,11 @@ if __name__ == "__main__":
     # sys.exit(app.exec_())
 
     app = QApplication(sys.argv)
-    splash = QSplashScreen(QPixmap("../data/loading.jpg"))
+    splash = QSplashScreen(QPixmap("loading.jpg"))
     splash.showMessage("加载... 0%", Qt.AlignHCenter | Qt.AlignBottom, Qt.black)
     splash.show()
     Pnet, Rnet, Onet = loadNet()
     mw = MyWindow()
-    #mw.load_data(splash)
     lock = threading.Lock()
     mw.initNet(Pnet, Rnet, Onet, lock)
     mw.initFacenet()
