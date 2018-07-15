@@ -7,7 +7,7 @@ import cv2
 import threading
 import time
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QWidget, QApplication, QGroupBox, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout
+from PyQt5.QtWidgets import QWidget,QSplashScreen, QApplication, QGroupBox, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout
 from MTCNN import create_Kao_Onet, create_Kao_Rnet, create_Kao_Pnet
 import imutils
 import tools_matrix as tools
@@ -87,8 +87,8 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(self.gridGroupBox)
 
     def createGridGroupBox_RecognizedDetail(self):
-        init_image = QPixmap("1.png").scaled(img_w_dis, img_w_dis)
-        init_orig_image = QPixmap("1.png").scaled(img_w_dis * 2, img_w_dis * 2)
+        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_w_dis)
+        init_orig_image = QPixmap("../data/loading.png").scaled(img_w_dis * 2, img_w_dis * 2)
         imgeLabel_0 = QLabel()
         imgeLabel_0.setPixmap(init_image)
         imgeLabel_reg = QLabel("截取图像")
@@ -112,15 +112,8 @@ class MyWindow(QMainWindow):
         self.list_Recognize = []
         self.q_recognize = Queue()
         layout = QGridLayout()
-        # init_image = QPixmap("data/001.png").scaled(img_w_dis, img_w_dis)
-        # self.imgeLabel_1 = QLabel()
-        # self.imgeLabel_1.setPixmap(init_image)
-        # self.imgeLabel_2 = QLabel()
-        # self.imgeLabel_2.setPixmap(init_image)
-        # layout.addWidget(self.imgeLabel_1)
-        # layout.addWidget(self.imgeLabel_2)
 
-        init_image = QPixmap("1.png").scaled(img_w_dis, img_w_dis)
+        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_w_dis)
 
         for i in range(0, 2):
             for j in range(0, 6):
@@ -150,7 +143,7 @@ class MyWindow(QMainWindow):
 
     def createGridGroupBox_UnRecognize(self):
         self.list_UnRecognize = []
-        init_image = QPixmap("1.png").scaled(img_w_dis, img_w_dis)
+        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_w_dis)
         layout = QGridLayout()
         for i in range(0, 2):
             for j in range(0, 4):
@@ -167,7 +160,7 @@ class MyWindow(QMainWindow):
         layout = QGridLayout()
         layout.setSpacing(10)
         self.pictureLabel = QLabel()
-        init_image = QPixmap("1.png").scaled(640, 480)
+        init_image = QPixmap("../data/loading.jpg").scaled(640, 480)
         self.pictureLabel.setPixmap(init_image)
         self.playButton = QPushButton()
         self.playButton.setEnabled(True)
@@ -666,15 +659,15 @@ def loadNet():
     Pnet = create_Kao_Pnet(r'12net.h5')
     Rnet = create_Kao_Rnet(r'24net.h5')
     Onet = create_Kao_Onet(r'48net.h5')  # will not work. caffe and TF incompatible
-    img = cv2.imread('1.png')
+    img = cv2.imread('../data/loadNet.png')
     scale_img = cv2.resize(img, (100, 100))
     input = scale_img.reshape(1, *scale_img.shape)
     Pnet.predict(input)
-    img = cv2.imread('1.png')
+    img = cv2.imread('../data/loadNet.png')
     scale_img = cv2.resize(img, (24, 24))
     input = scale_img.reshape(1, *scale_img.shape)
     Rnet.predict(input)
-    img = cv2.imread('1.png')
+    img = cv2.imread('../data/loadNet.png')
     scale_img = cv2.resize(img, (48, 48))
     input = scale_img.reshape(1, *scale_img.shape)
     Onet.predict(input)
@@ -689,11 +682,16 @@ if __name__ == "__main__":
     # sys.exit(app.exec_())
 
     app = QApplication(sys.argv)
+    splash = QSplashScreen(QPixmap("../data/loading.jpg"))
+    splash.showMessage("加载... 0%", Qt.AlignHCenter | Qt.AlignBottom, Qt.black)
+    splash.show()
     Pnet, Rnet, Onet = loadNet()
     mw = MyWindow()
+    #mw.load_data(splash)
     lock = threading.Lock()
     mw.initNet(Pnet, Rnet, Onet, lock)
     mw.initFacenet()
     mw.set_video("east.mp4", MyWindow.VIDEO_TYPE_OFFLINE, False)
     mw.show()
+    splash.finish(mw)
     sys.exit(app.exec_())
