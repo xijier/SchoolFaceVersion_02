@@ -59,6 +59,7 @@ class MyWindow(QMainWindow):
         self.cameraConfig = cameraConfigDia()
         self.createStatusbar()
         self.createMenu()
+        self.pre =  0.0
 
         self.threshold = [0.6, 0.6, 0.7]
         self.video_url = video_url
@@ -277,8 +278,10 @@ class MyWindow(QMainWindow):
                 # thread1 =rectangleThread(self.threadId ,frame,self.Pnet,self.Rnet,self.Onet,self.lock,self.imgeLabel_0,self.imgeLabel_1,self.imgeLabel_2)
                 # self.threadId = self.threadId + 1
                 # thread1.start()
-                self.thread_it(self.music, songs, frame)
-                end = time.time()
+                now = time.time()
+                if now - self.pre > 0.5:
+                    self.thread_it(self.music, songs, frame)
+                    self.pre = now
                 height, width = frame.shape[:2]
                 if frame.ndim == 3:
                     rgb = cvtColor(frame, COLOR_BGR2RGB)
