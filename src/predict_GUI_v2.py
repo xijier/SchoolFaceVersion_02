@@ -270,14 +270,15 @@ class MyWindow(QMainWindow):
             success, frame = self.playCapture.read()
             if success:
                 start = time.time()
-                frame = imutils.resize(frame, width=1000)
+                #frame = imutils.resize(frame, width=1000)
+                frame = imutils.resize(frame)
                 # thread1 =rectangleThread(self.threadId ,frame,self.Pnet,self.Rnet,self.Onet,self.lock,self.imgeLabel_0,self.imgeLabel_1,self.imgeLabel_2)
                 # self.threadId = self.threadId + 1
                 # thread1.start()
-                now = time.time()
-                if now - self.pre > 0.5:
-                    self.thread_it(self.music, songs, frame)
-                    self.pre = now
+                # now = time.time()
+                # if now - self.pre > 0.5:
+                #     self.thread_it(self.music, songs, frame)
+                #     self.pre = now
                 height, width = frame.shape[:2]
                 if frame.ndim == 3:
                     rgb = cvtColor(frame, COLOR_BGR2RGB)
@@ -285,6 +286,10 @@ class MyWindow(QMainWindow):
                     rgb = cvtColor(frame, COLOR_GRAY2BGR)
 
                 temp_image = QImage(rgb.flatten(), width, height, QImage.Format_RGB888)
+                now = time.time()
+                if now - self.pre > 2:
+                    cv2.imwrite('../data/images/' + str(start) + 'test.jpg', frame)
+                    self.pre = now
                 temp_pixmap = QPixmap.fromImage(temp_image).scaled(640, 480)
                 self.pictureLabel.setPixmap(temp_pixmap)
 
@@ -678,7 +683,7 @@ if __name__ == "__main__":
     mw = MyWindow()
     lock = threading.Lock()
     mw.initNet(Pnet, Rnet, Onet, lock)
-    mw.initFacenet()
+    #mw.initFacenet()
     mw.set_video("east.mp4", MyWindow.VIDEO_TYPE_OFFLINE, False)
     mw.show()
     splash.finish(mw)
