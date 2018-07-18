@@ -25,7 +25,7 @@ from scipy import misc
 import validate_twopics as vt
 
 songs = ['1.mp4', '2.mp4']
-img_w_dis = 100
+img_w_dis = 80
 img_h_dis = 100
 click_lock = threading.Lock()
 
@@ -91,7 +91,7 @@ class MyWindow(QMainWindow):
 
     def createGridGroupBox_RecognizedDetail(self):
         #init_image = QPixmap("1.png").scaled(img_w_dis , img_w_dis )
-        init_orig_image = QPixmap("1.png").scaled(img_w_dis*2, img_w_dis*2)
+        init_orig_image = QPixmap("1.png").scaled(img_w_dis*2.5, img_h_dis*2.5)
         #imgeLabel_0 = QLabel()
         #imgeLabel_0.setPixmap(init_image)
         #imgeLabel_reg = QLabel("截取图像")
@@ -102,12 +102,12 @@ class MyWindow(QMainWindow):
         #vboxGroupBox_0.setLayout(layoutbox_0)
         self.imgeLabel_1 = QLabel()
         self.imgeLabel_1.setPixmap(init_orig_image)
-        imgeLabel_sample = QLabel("样本图像")
+        self.imgeLabel_sample = QLabel("样本图像")
         layout = QGridLayout()
         #layout.addWidget(imgeLabel_0, 0, 0)
         layout.addWidget(self.imgeLabel_1, 0, 0)
         #layout.addWidget(imgeLabel_reg, 1, 0)
-        layout.addWidget(imgeLabel_sample, 1, 0)
+        layout.addWidget(self.imgeLabel_sample, 1, 0)
         self.gridGroupBox_RecognizeDetail = QGroupBox("详细信息")
         self.gridGroupBox_RecognizeDetail.setLayout(layout)
 		
@@ -147,7 +147,7 @@ class MyWindow(QMainWindow):
 
     def createGridGroupBox_UnRecognize(self):
         self.list_UnRecognize = []
-        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_w_dis)
+        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_h_dis)
         layout = QGridLayout()
         for i in range(0, 2):
             for j in range(0, 4):
@@ -245,11 +245,12 @@ class MyWindow(QMainWindow):
         box.update()
         text = box.text()
         print("detailDisplay text is : %s" % text)
+        self.imgeLabel_sample.setText(text)
         dir = '../data/zhongzhuan'  #dir + '/' + file + '_0.png'
         files = os.listdir(dir)
         for file in files:
-            if text in file:
-                init_orig_image = QPixmap(dir + '/' + file + '/'+file+'_0.png').scaled(img_w_dis * 2, img_w_dis * 2)
+            if file in text:
+                init_orig_image = QPixmap(dir + '/' + file + '/'+file+'.png').scaled(img_w_dis * 2, img_w_dis * 2)
                 self.imgeLabel_1.setPixmap(init_orig_image)
         click_lock.release()
     def play(self):
@@ -481,11 +482,17 @@ class MyWindow(QMainWindow):
         print('Loaded classifier model from file "%s"' % self.classifier_filename_exp)
 
         predictions = model.predict_proba(emb_array)
+        print("czg predictions")
+        print(predictions)
         best_class_indices = np.argmax(predictions, axis=1)
         # best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
         resultText = class_names[best_class_indices[0]]
-        print("resultText is : %s" % resultText)
-        return resultText
+        best_class_indices = np.argmax(predictions, axis=1)
+        print(best_class_indices)
+        best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
+        print(best_class_probabilities)
+        print("czg resultText is : %s" % resultText)
+        return resultText,best_class_probabilities
         # self.textbox.setText(resultText)
 
     def rectangleDraw(self, rectangles, img):
@@ -507,7 +514,7 @@ class MyWindow(QMainWindow):
                               (255, 0, 0), 1)
                 if not self.img_stack:
                     self.img_stack.append(crop_img)
-                    rec_name = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
+                    rec_name, best_class_probabilities = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
                     crop_img = imutils.resize(crop_img, width=100)
                     height, width = crop_img.shape[:2]
                     temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
@@ -533,28 +540,29 @@ class MyWindow(QMainWindow):
                     vt_result = vt.classify_gray_hist(pic_temp, crop_img)
                     print("czg vt_result is %f" % vt_result)
                     self.img_stack.append(crop_img)
-                    if vt_result < 0.7:
-                        rec_name = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
-                        crop_img = imutils.resize(crop_img, width=100)
-                        height, width = crop_img.shape[:2]
-                        temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
-                        temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
-                        # 加消息队列线程实现图片更新
-                        #self.imgeLabel_1.setPixmap(temp_pixmap)
+                    if vt_result < 0.65:
+                        rec_name,best_class_probabilities = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
+                        if best_class_probabilities[0] < 0.0095:
+                            crop_img = imutils.resize(crop_img, width=100)
+                            height, width = crop_img.shape[:2]
+                            temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
+                            temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
+                            # 加消息队列线程实现图片更新
+                            #self.imgeLabel_1.setPixmap(temp_pixmap)
 
-                        item = self.q_recognize.get()
-                        # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
-                        # layoutbox.removeWidget(QLabel)
-                        imageLabel_img = item.findChild(QLabel, "image")
-                        imageLabel_img.setPixmap(temp_pixmap)
-                        imageLabel_name = item.findChild(QPushButton, "name")
-                        imageLabel_name.setText(rec_name)
-                        imageLabel_id = item.findChild(QLabel, "id")
-                        imageLabel_id.setText(rec_name)
-                        imageLabel_rate = item.findChild(QLabel, "rate")
-                        rec_rate = random.randint(70, 96)/100;
-                        imageLabel_rate.setText(str(rec_rate))
-                        self.q_recognize.put(item)
+                            item = self.q_recognize.get()
+                            # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
+                            # layoutbox.removeWidget(QLabel)
+                            imageLabel_img = item.findChild(QLabel, "image")
+                            imageLabel_img.setPixmap(temp_pixmap)
+                            imageLabel_name = item.findChild(QPushButton, "name")
+                            imageLabel_name.setText(rec_name)
+                            imageLabel_id = item.findChild(QLabel, "id")
+                            imageLabel_id.setText(rec_name)
+                            imageLabel_rate = item.findChild(QLabel, "rate")
+                            # rec_rate = random.randint(70, 96)/100;
+                            imageLabel_rate.setText(str(round((0.03-best_class_probabilities[0])/0.03, 2)))
+                            self.q_recognize.put(item)
 
         return draw
 
