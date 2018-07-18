@@ -19,6 +19,7 @@ import facenet
 import pickle
 import random
 import tools_matrix as tools
+import threading
 import align.detect_face
 from scipy import misc
 import validate_twopics as vt
@@ -26,7 +27,7 @@ import validate_twopics as vt
 songs = ['1.mp4', '2.mp4']
 img_w_dis = 100
 img_h_dis = 100
-
+click_lock = threading.Lock()
 
 class MyWindow(QMainWindow):
     VIDEO_TYPE_OFFLINE = 0
@@ -89,27 +90,27 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(self.gridGroupBox)
 
     def createGridGroupBox_RecognizedDetail(self):
-        init_image = QPixmap("../data/loading.jpg").scaled(img_w_dis, img_w_dis)
-        init_orig_image = QPixmap("../data/loading.png").scaled(img_w_dis * 2, img_w_dis * 2)
-        imgeLabel_0 = QLabel()
-        imgeLabel_0.setPixmap(init_image)
-        imgeLabel_reg = QLabel("截取图像")
-        vboxGroupBox_0 = QGroupBox()
-        layoutbox_0 = QVBoxLayout()
-        layoutbox_0.addWidget(imgeLabel_0)
-        layoutbox_0.addWidget(imgeLabel_reg)
-        vboxGroupBox_0.setLayout(layoutbox_0)
-        imgeLabel_1 = QLabel()
-        imgeLabel_1.setPixmap(init_orig_image)
+        #init_image = QPixmap("1.png").scaled(img_w_dis , img_w_dis )
+        init_orig_image = QPixmap("1.png").scaled(img_w_dis*2, img_w_dis*2)
+        #imgeLabel_0 = QLabel()
+        #imgeLabel_0.setPixmap(init_image)
+        #imgeLabel_reg = QLabel("截取图像")
+        #vboxGroupBox_0 = QGroupBox()
+        #layoutbox_0 = QVBoxLayout()
+        #layoutbox_0.addWidget(imgeLabel_0)
+        #layoutbox_0.addWidget(imgeLabel_reg)
+        #vboxGroupBox_0.setLayout(layoutbox_0)
+        self.imgeLabel_1 = QLabel()
+        self.imgeLabel_1.setPixmap(init_orig_image)
         imgeLabel_sample = QLabel("样本图像")
         layout = QGridLayout()
-        layout.addWidget(imgeLabel_0, 0, 0)
-        layout.addWidget(imgeLabel_1, 0, 1)
-        layout.addWidget(imgeLabel_reg, 1, 0)
-        layout.addWidget(imgeLabel_sample, 1, 1)
+        #layout.addWidget(imgeLabel_0, 0, 0)
+        layout.addWidget(self.imgeLabel_1, 0, 0)
+        #layout.addWidget(imgeLabel_reg, 1, 0)
+        layout.addWidget(imgeLabel_sample, 1, 0)
         self.gridGroupBox_RecognizeDetail = QGroupBox("详细信息")
         self.gridGroupBox_RecognizeDetail.setLayout(layout)
-
+		
     def createGridGroupBox_Recognized(self):
         self.list_Recognize = []
         self.q_recognize = Queue()
@@ -126,7 +127,7 @@ class MyWindow(QMainWindow):
                 imgeLabel_0 = QLabel()
                 imgeLabel_0.setObjectName("image")
                 imgeLabel_0.setPixmap(init_image)
-                imgeLabel_name = QLabel("姓名")
+                imgeLabel_name = QPushButton("姓名")
                 imgeLabel_name.setObjectName("name")
                 imgeLabel_id = QLabel("学号")
                 imgeLabel_id.setObjectName("id")
@@ -137,6 +138,7 @@ class MyWindow(QMainWindow):
                 layoutbox.addWidget(imgeLabel_id)
                 layoutbox.addWidget(imgeLabel_rate)
                 vboxGroupBox.setLayout(layoutbox)
+                imgeLabel_name.clicked.connect(self.detailDisplay)
                 layout.addWidget(vboxGroupBox, i, j)
                 self.list_Recognize.append(vboxGroupBox)
                 self.q_recognize.put(vboxGroupBox)
@@ -235,7 +237,21 @@ class MyWindow(QMainWindow):
         self.set_timer_fps()
         if self.auto_play:
             self.switch_video()
-
+    def detailDisplay(self):
+        # imageLabel_name = box.findChild(QLabel, "name")
+        click_lock.acquire()
+        box = self.sender()
+        text = box.text()
+        box.update()
+        text = box.text()
+        print("detailDisplay text is : %s" % text)
+        dir = '../data/zhongzhuan'  #dir + '/' + file + '_0.png'
+        files = os.listdir(dir)
+        for file in files:
+            if text in file:
+                init_orig_image = QPixmap(dir + '/' + file + '/'+file+'_0.png').scaled(img_w_dis * 2, img_w_dis * 2)
+                self.imgeLabel_1.setPixmap(init_orig_image)
+        click_lock.release()
     def play(self):
         if self.video_url == "" or self.video_url is None:
             return
@@ -504,13 +520,13 @@ class MyWindow(QMainWindow):
                     # layoutbox.removeWidget(QLabel)
                     imageLabel_img = item.findChild(QLabel, "image")
                     imageLabel_img.setPixmap(temp_pixmap)
-                    imageLabel_name = item.findChild(QLabel, "name")
+                    imageLabel_name = item.findChild(QPushButton, "name")
                     imageLabel_name.setText(rec_name)
                     imageLabel_id = item.findChild(QLabel, "id")
                     imageLabel_id.setText(rec_name)
                     imageLabel_rate = item.findChild(QLabel, "rate")
-                    #rec_rate = random.randint(70, 96) / 100;
-                    #imageLabel_rate.setText(str(rec_rate))
+                    rec_rate = random.randint(70, 96) / 100;
+                    imageLabel_rate.setText(str(rec_rate))
                     self.q_recognize.put(item)
                 else:
                     pic_temp = self.img_stack.pop()
@@ -531,13 +547,13 @@ class MyWindow(QMainWindow):
                         # layoutbox.removeWidget(QLabel)
                         imageLabel_img = item.findChild(QLabel, "image")
                         imageLabel_img.setPixmap(temp_pixmap)
-                        imageLabel_name = item.findChild(QLabel, "name")
+                        imageLabel_name = item.findChild(QPushButton, "name")
                         imageLabel_name.setText(rec_name)
                         imageLabel_id = item.findChild(QLabel, "id")
                         imageLabel_id.setText(rec_name)
                         imageLabel_rate = item.findChild(QLabel, "rate")
-                        #rec_rate = random.randint(70, 96)/100;
-                        #imageLabel_rate.setText(str(rec_rate))
+                        rec_rate = random.randint(70, 96)/100;
+                        imageLabel_rate.setText(str(rec_rate))
                         self.q_recognize.put(item)
 
         return draw
@@ -648,15 +664,15 @@ def loadNet():
     Pnet = create_Kao_Pnet(r'12net.h5')
     Rnet = create_Kao_Rnet(r'24net.h5')
     Onet = create_Kao_Onet(r'48net.h5')  # will not work. caffe and TF incompatible
-    img = cv2.imread('../data/loadNet.png')
+    img = cv2.imread('../data/loading.jpg')
     scale_img = cv2.resize(img, (100, 100))
     input = scale_img.reshape(1, *scale_img.shape)
     Pnet.predict(input)
-    img = cv2.imread('../data/loadNet.png')
+    img = cv2.imread('../data/loading.jpg')
     scale_img = cv2.resize(img, (24, 24))
     input = scale_img.reshape(1, *scale_img.shape)
     Rnet.predict(input)
-    img = cv2.imread('../data/loadNet.png')
+    img = cv2.imread('../data/loading.jpg')
     scale_img = cv2.resize(img, (48, 48))
     input = scale_img.reshape(1, *scale_img.shape)
     Onet.predict(input)
@@ -671,7 +687,7 @@ if __name__ == "__main__":
     # sys.exit(app.exec_())
 
     app = QApplication(sys.argv)
-    splash = QSplashScreen(QPixmap("loading.jpg"))
+    splash = QSplashScreen(QPixmap("../data/loading.jpg"))
     splash.showMessage("加载... 0%", Qt.AlignHCenter | Qt.AlignBottom, Qt.black)
     splash.show()
     Pnet, Rnet, Onet = loadNet()
