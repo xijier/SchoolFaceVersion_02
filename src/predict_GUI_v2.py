@@ -43,7 +43,7 @@ class MyWindow(QMainWindow):
     def __init__(self, video_url="", video_type=VIDEO_TYPE_OFFLINE, auto_play=False):
         super(MyWindow, self).__init__()
         self.resize(1024, 768)
-        self.setWindowTitle("人脸识别")
+        self.setWindowTitle("奥卫科技-人脸识别")
         self.createGridGroupBox_UnRecognize()
         self.createGridGroupBox_Recognized()
         self.createGridGroupBox_Video()
@@ -91,7 +91,7 @@ class MyWindow(QMainWindow):
 
     def createGridGroupBox_RecognizedDetail(self):
         #init_image = QPixmap("1.png").scaled(img_w_dis , img_w_dis )
-        init_orig_image = QPixmap("1.png").scaled(img_w_dis*2.5, img_h_dis*2.5)
+        init_orig_image = QPixmap("../data/sample.png").scaled(img_w_dis*2, img_w_dis*2)
         #imgeLabel_0 = QLabel()
         #imgeLabel_0.setPixmap(init_image)
         #imgeLabel_reg = QLabel("截取图像")
@@ -123,7 +123,6 @@ class MyWindow(QMainWindow):
                 vboxGroupBox = QGroupBox()
                 layoutbox = QVBoxLayout()
                 layoutbox.setObjectName("boxlayout")
-
                 imgeLabel_0 = QLabel()
                 imgeLabel_0.setObjectName("image")
                 imgeLabel_0.setPixmap(init_image)
@@ -287,7 +286,8 @@ class MyWindow(QMainWindow):
             success, frame = self.playCapture.read()
             if success:
                 start = time.time()
-                frame = imutils.resize(frame, width=1000)
+                #frame = imutils.resize(frame, width=1000)
+                frame = imutils.resize(frame)
                 # thread1 =rectangleThread(self.threadId ,frame,self.Pnet,self.Rnet,self.Onet,self.lock,self.imgeLabel_0,self.imgeLabel_1,self.imgeLabel_2)
                 # self.threadId = self.threadId + 1
                 # thread1.start()
@@ -302,6 +302,10 @@ class MyWindow(QMainWindow):
                     rgb = cvtColor(frame, COLOR_GRAY2BGR)
 
                 temp_image = QImage(rgb.flatten(), width, height, QImage.Format_RGB888)
+                now = time.time()
+                if now - self.pre > 2:
+                    cv2.imwrite('../data/images/' + str(start) + 'test.jpg', frame)
+                    self.pre = now
                 temp_pixmap = QPixmap.fromImage(temp_image).scaled(640, 480)
                 self.pictureLabel.setPixmap(temp_pixmap)
 
@@ -366,8 +370,7 @@ class MyWindow(QMainWindow):
         image_num = len(scales)
         rectangles = []
         for i in range(image_num):
-            cls_prob = out[i][0][0][:, :,
-                       1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
+            cls_prob = out[i][0][0][:, :, 1]  # i = #scale, first 0 select cls score, second 0 = batchnum, alway=0. 1 one hot repr
             roi = out[i][1][0]
             out_h, out_w = cls_prob.shape
             out_side = out_w
@@ -521,10 +524,7 @@ class MyWindow(QMainWindow):
                     temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis , img_w_dis )
                     # 加消息队列线程实现图片更新
                     # self.imgeLabel_1.setPixmap(temp_pixmap)
-
                     item = self.q_recognize.get()
-                    # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
-                    # layoutbox.removeWidget(QLabel)
                     imageLabel_img = item.findChild(QLabel, "image")
                     imageLabel_img.setPixmap(temp_pixmap)
                     imageLabel_name = item.findChild(QPushButton, "name")
@@ -540,6 +540,7 @@ class MyWindow(QMainWindow):
                     vt_result = vt.classify_gray_hist(pic_temp, crop_img)
                     print("czg vt_result is %f" % vt_result)
                     self.img_stack.append(crop_img)
+
                     if vt_result < 0.65:
                         rec_name,best_class_probabilities = self.recognizeFace(imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
                         if best_class_probabilities[0] < 0.0095:
@@ -563,6 +564,7 @@ class MyWindow(QMainWindow):
                             # rec_rate = random.randint(70, 96)/100;
                             imageLabel_rate.setText(str(round((0.03-best_class_probabilities[0])/0.03, 2)))
                             self.q_recognize.put(item)
+
 
         return draw
 
@@ -636,7 +638,6 @@ class cameraConfigDia(QDialog):
 class Communicate(QObject):
     signal = pyqtSignal(str)
 
-
 class VideoTimer(QThread):
 
     def __init__(self, frequent=20):
@@ -686,14 +687,7 @@ def loadNet():
     Onet.predict(input)
     return Pnet, Rnet, Onet
 
-
 if __name__ == "__main__":
-    # app = QApplication(sys.argv)
-    # win = MyWindow()
-    # lock = threading.Lock()
-    # win.show()
-    # sys.exit(app.exec_())
-
     app = QApplication(sys.argv)
     splash = QSplashScreen(QPixmap("../data/loading.jpg"))
     splash.showMessage("加载... 0%", Qt.AlignHCenter | Qt.AlignBottom, Qt.black)
