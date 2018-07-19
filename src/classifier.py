@@ -88,8 +88,8 @@ def main(args):
                 end_index = min((i+1)*args.batch_size, nrof_images)
                 paths_batch = paths[start_index:end_index]
                 images = facenet.load_data(paths_batch, False, False, args.image_size)
-                feed_dict = { images_placeholder:images, phase_train_placeholder:False }
-                emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
+                feed_dict = {images_placeholder: images, phase_train_placeholder: False}
+                emb_array[start_index:end_index, :] = sess.run(embeddings, feed_dict=feed_dict)
                 print("start_index:%d" % start_index)
                 print("end_index:%d" % end_index)
             
@@ -172,7 +172,7 @@ def parse_arguments(argv):
     parser.add_argument('--min_nrof_images_per_class', type=int,
         help='Only include classes with at least this number of images in the dataset', default=1)
     parser.add_argument('--nrof_train_images_per_class', type=int,
-        help='Use this number of images from each class for training and the rest for testing', default=7)
+        help='Use this number of images from each class for training and the rest for testing', default=25)
     
     return parser.parse_args(argv)
 
