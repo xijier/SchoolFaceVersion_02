@@ -23,6 +23,7 @@ import threading
 import align.detect_face
 from scipy import misc
 import validate_twopics as vt
+import dlib
 
 songs = ['1.mp4', '2.mp4']
 img_w_dis = 80
@@ -59,13 +60,13 @@ class MyWindow(QMainWindow):
         self.gridGroupBox = QGroupBox()
         self.gridGroupBox.setLayout(main_layout)
         self.setCentralWidget(self.gridGroupBox)
-
+        self.detector = dlib.get_frontal_face_detector()
         self.cameraConfig = cameraConfigDia()
         self.createStatusbar()
         self.createMenu()
         self.pre = 0.0
         self.img_stack = []
-        self.threshold = [0.6, 0.6, 0.7]
+        self.threshold = [0.8, 0.8, 0.8]
         self.video_url = video_url
         self.video_type = video_type  # 0: offline  1: realTime
         self.auto_play = auto_play
@@ -288,13 +289,10 @@ class MyWindow(QMainWindow):
                 start = time.time()
                 #frame = imutils.resize(frame, width=1000)
                 frame = imutils.resize(frame)
-                # thread1 =rectangleThread(self.threadId ,frame,self.Pnet,self.Rnet,self.Onet,self.lock,self.imgeLabel_0,self.imgeLabel_1,self.imgeLabel_2)
-                # self.threadId = self.threadId + 1
-                # thread1.start()
-                now = time.time()
-                if now - self.pre > 0.5:
-                    self.thread_it(self.music, songs, frame)
-                    self.pre = now
+                # now = time.time()
+                # if now - self.pre > 0.1:
+                self.thread_it(self.music, songs, frame)
+                #self.pre = now
                 height, width = frame.shape[:2]
                 if frame.ndim == 3:
                     rgb = cvtColor(frame, COLOR_BGR2RGB)
@@ -351,6 +349,25 @@ class MyWindow(QMainWindow):
                        MyWindow.STATUS_PAUSE,
                        MyWindow.STATUS_PLAYING)[self.status]
 
+    def detectFace_dlib(self, img,detector):
+        dets = detector(img, 0)
+        rectangles = []
+        for i, d in enumerate(dets):  # 依次区分截图中的人脸
+            x1 = d.top() if d.top() > 0 else 0
+            y1 = d.bottom() if d.bottom() > 0 else 0
+            x2 = d.left() if d.left() > 0 else 0
+            y2 = d.right() if d.right() > 0 else 0
+            #img = cv2.rectangle(img, (x2, x1), (y2, y1), (255, 0, 0), 2)  # 人脸画框
+            face = img[x1:y1, x2:y2]
+            rectangle=[]
+            rectangle.append(x2)
+            rectangle.append(x1)
+            rectangle.append(y1)
+            rectangle.append(y2)
+            rectangles.append(rectangle)
+        return rectangles
+
+
     def detectFace(self, img,threshold):
 
         caffe_img = (img.copy() - 127.5) / 127.5
@@ -383,7 +400,7 @@ class MyWindow(QMainWindow):
             rectangle = tools.detect_face_12net(cls_prob, roi, out_side, 1 / scales[i], origin_w, origin_h,
                                                 threshold[0])
             rectangles.extend(rectangle)
-        rectangles = tools.NMS(rectangles, 0.7, 'iou')
+        rectangles = tools.NMS(rectangles, 0.85, 'iou')
 
         t1 = time.time()
         print('time for 12 net is: ', t1 - t0)
@@ -418,12 +435,10 @@ class MyWindow(QMainWindow):
         crop_number = 0
         predict_batch = []
         for rectangle in rectangles:
-            # print('calculating net 48 crop_number:', crop_number)
             crop_img = caffe_img[int(rectangle[1]):int(rectangle[3]), int(rectangle[0]):int(rectangle[2])]
             scale_img = cv2.resize(crop_img, (48, 48))
             predict_batch.append(scale_img)
             crop_number += 1
-
         predict_batch = np.array(predict_batch)
 
         output = self.Onet.predict(predict_batch)
@@ -443,15 +458,6 @@ class MyWindow(QMainWindow):
         return y
 
     def crop(self, image, random_crop, image_size):
-        # if image.shape[1] > image_size:
-        # sz1 = int(image.shape[1] // 2)
-        # sz2 = int(image_size // 2)
-        # # if random_crop:
-        # #     diff = sz1 - sz2
-        # #     (h, v) = (np.random.randint(-diff, diff + 1), np.random.randint(-diff, diff + 1))
-        # # else:
-        # #     (h, v) = (0, 0)
-        # image = image[(sz1 - sz2):(sz1 + sz2), (sz1 - sz2):(sz1 + sz2), :]
         image = cv2.resize(image, (160, 160))
         return image
 
@@ -459,15 +465,8 @@ class MyWindow(QMainWindow):
         if random_flip and np.random.choice([True, False]):
             image = np.fliplr(image)
         return image
-
-    # to identify one pic
+        # to identify one pic
     def recognizeFace(self, image):
-        # with tf.Graph().as_default():
-        # with tf.Session() as sess:
-        # facenet.load_model('models/20180408-102900')
-        # images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-        # embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-        #phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         embedding_size = self.embeddings.get_shape()[1]
         emb_array = np.zeros((1, embedding_size))
         images = np.zeros((1, 160, 160, 3))
@@ -481,7 +480,6 @@ class MyWindow(QMainWindow):
         print('Testing classifier')
         with open(self.classifier_filename_exp, 'rb') as infile:
             (model, class_names) = pickle.load(infile)
-
         print('Loaded classifier model from file "%s"' % self.classifier_filename_exp)
 
         predictions = model.predict_proba(emb_array)
@@ -572,13 +570,9 @@ class MyWindow(QMainWindow):
     def music(self, songs, frame):
         self.lock.acquire()
         rectangles = self.detectFace(frame, self.threshold)
-        frame = self.rectangleDraw(rectangles, frame)
-        print(songs[0])
-        # for x in songs:
-        #     time.sleep(2)
-        #     print(x)
+        #rectangles = self.detectFace_dlib(frame,detector)
+        #frame = self.rectangleDraw(rectangles, frame)
         self.lock.release()
-
     # 打包进线程（耗时的操作）
     @staticmethod
     def thread_it(func, *args):
