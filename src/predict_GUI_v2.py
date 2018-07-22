@@ -27,8 +27,8 @@ import dlib
 from rectangleDrawThread import rectangleThread
 
 songs = ['1.mp4', '2.mp4']
-img_w_dis = 150
-img_h_dis = 150
+img_w_dis = 120
+img_h_dis = 120
 click_lock = threading.Lock()
 
 class MyWindow(QMainWindow):
@@ -74,6 +74,7 @@ class MyWindow(QMainWindow):
         self.status = self.STATUS_INIT  # 0: init 1:playing 2: pause
         self.timer = VideoTimer()
         self.timer.timeSignal.signal[str].connect(self.show_video_images)
+        self.q_ready4rec = Queue() #待识别的放在这里
         # video 初始设置
         self.playCapture = VideoCapture()
         if self.video_url != "":
@@ -111,23 +112,42 @@ class MyWindow(QMainWindow):
         for i in range(0, 2):
             for j in range(0, 6):
                 vboxGroupBox = QGroupBox()
-                layoutbox = QVBoxLayout()
-                layoutbox.setObjectName("boxlayout")
+                layoutboxh = QHBoxLayout()
+                layoutboxv = QVBoxLayout()
+                layoutboxh1 = QHBoxLayout()
+                layoutboxh2 = QHBoxLayout()
+                layoutboxh3 = QHBoxLayout()
+                layoutboxv.setObjectName("boxlayout")
                 imgeLabel_0 = QLabel()
                 imgeLabel_0.setObjectName("image")
                 imgeLabel_0.setPixmap(init_image)
-                imgeLabel_name = QPushButton("姓名")
-                imgeLabel_name.setObjectName("name")
-                imgeLabel_id = QLabel("学号")
-                imgeLabel_id.setObjectName("id")
-                imgeLabel_rate = QLabel("识别率")
-                imgeLabel_rate.setObjectName("rate")
-                layoutbox.addWidget(imgeLabel_0)
-                layoutbox.addWidget(imgeLabel_name)
-                layoutbox.addWidget(imgeLabel_id)
-                layoutbox.addWidget(imgeLabel_rate)
-                vboxGroupBox.setLayout(layoutbox)
-                imgeLabel_name.clicked.connect(self.detailDisplay)
+                imgeLabel_name1 = QPushButton("姓名")
+                imgeLabel_name1.setObjectName("name1")
+                imgeLabel_rate1 = QLabel("识别率")
+                imgeLabel_rate1.setObjectName("rate1")
+                layoutboxh1.addWidget(imgeLabel_name1)
+                layoutboxh1.addWidget(imgeLabel_rate1)
+                imgeLabel_name2 = QPushButton("姓名")
+                imgeLabel_name2.setObjectName("name2")
+                imgeLabel_rate2 = QLabel("识别率")
+                imgeLabel_rate2.setObjectName("rate2")
+                layoutboxh2.addWidget(imgeLabel_name2)
+                layoutboxh2.addWidget(imgeLabel_rate2)
+                imgeLabel_name3 = QPushButton("姓名")
+                imgeLabel_name3.setObjectName("name3")
+                imgeLabel_rate3 = QLabel("识别率")
+                imgeLabel_rate3.setObjectName("rate3")
+                layoutboxh3.addWidget(imgeLabel_name3)
+                layoutboxh3.addWidget(imgeLabel_rate3)
+                layoutboxv.addLayout(layoutboxh1)
+                layoutboxv.addLayout(layoutboxh2)
+                layoutboxv.addLayout(layoutboxh3)
+                layoutboxh.addWidget(imgeLabel_0)
+                layoutboxh.addLayout(layoutboxv)
+                vboxGroupBox.setLayout(layoutboxh)
+                imgeLabel_name1.clicked.connect(self.detailDisplay)
+                imgeLabel_name2.clicked.connect(self.detailDisplay)
+                imgeLabel_name3.clicked.connect(self.detailDisplay)
                 layout.addWidget(vboxGroupBox, i, j)
                 self.q_recognize.put(vboxGroupBox)
         self.gridGroupBox_Recognize = QGroupBox("已识别")
@@ -473,14 +493,22 @@ class MyWindow(QMainWindow):
         print("czg predictions")
         print(predictions)
         best_class_indices = np.argmax(predictions, axis=1)
-        # best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
+        top3indice = sorted(predictions[0], reverse=True)[:3]
+        predictlist = predictions.tolist()
+        top3pro = []
+        top3pro.append(predictlist[0][predictlist[0].index(top3indice[0])])
+        top3pro.append(predictlist[0][predictlist[0].index(top3indice[1])])
+        top3pro.append(predictlist[0][predictlist[0].index(top3indice[2])])
         resultText = class_names[best_class_indices[0]]
-        best_class_indices = np.argmax(predictions, axis=1)
+        result3text = []
+        result3text.append(class_names[predictlist[0].index(top3indice[0])])
+        result3text.append(class_names[predictlist[0].index(top3indice[1])])
+        result3text.append(class_names[predictlist[0].index(top3indice[2])])
         print(best_class_indices)
         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
         print(best_class_probabilities)
         print("czg resultText is : %s" % resultText)
-        return resultText,best_class_probabilities
+        return result3text, top3pro
         # self.textbox.setText(resultText)
 
     def rectangleDraw(self, rectangles, img):
@@ -501,68 +529,60 @@ class MyWindow(QMainWindow):
                 cv2.rectangle(draw, (int(rectangle[0]), int(rectangle[1])), (int(rectangle[2]), int(rectangle[3])),
                               (255, 0, 0), 1)
                 crop_img = imutils.resize(crop_img, width=100)
-                height, width = crop_img.shape[:2]
-                temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
-                temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
-                # 加消息队列线程实现图片更新
-                item = self.q_unrecognize.get()
-                imageLabel_img = item.findChild(QLabel, "image")
-                imageLabel_img.setPixmap(temp_pixmap)
-                self.q_unrecognize.put(item)
-        return draw
-
-    def temp_recongize(self, crop_img):
-        if not self.img_stack:
-            self.img_stack.append(crop_img)
-            rec_name, best_class_probabilities = self.recognizeFace(
-                imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
-            crop_img = imutils.resize(crop_img, width=100)
-            height, width = crop_img.shape[:2]
-            temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
-            temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
-            # 加消息队列线程实现图片更新
-            # self.imgeLabel_1.setPixmap(temp_pixmap)
-            item = self.q_recognize.get()
-            imageLabel_img = item.findChild(QLabel, "image")
-            imageLabel_img.setPixmap(temp_pixmap)
-            imageLabel_name = item.findChild(QPushButton, "name")
-            imageLabel_name.setText(rec_name)
-            imageLabel_id = item.findChild(QLabel, "id")
-            imageLabel_id.setText(rec_name)
-            imageLabel_rate = item.findChild(QLabel, "rate")
-            rec_rate = random.randint(70, 96) / 100;
-            imageLabel_rate.setText(str(rec_rate))
-            self.q_recognize.put(item)
-        else:
-            pic_temp = self.img_stack.pop()
-            vt_result = vt.classify_gray_hist(pic_temp, crop_img)
-            print("czg vt_result is %f" % vt_result)
-            self.img_stack.append(crop_img)
-
-            if vt_result < 0.65:
-                rec_name, best_class_probabilities = self.recognizeFace(
-                    imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
-                if best_class_probabilities[0] < 0.0095:
-                    crop_img = imutils.resize(crop_img, width=100)
+                if not self.img_stack:
+                    self.img_stack.append(crop_img)
+                    self.q_ready4rec.put(crop_img)
+                    self.temp_recongize()
                     height, width = crop_img.shape[:2]
                     temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
                     temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
                     # 加消息队列线程实现图片更新
-                    # self.imgeLabel_1.setPixmap(temp_pixmap)
-
-                    item = self.q_recognize.get()
-                    # layoutbox = item.findChild(QVBoxLayout, "boxlayout")
-                    # layoutbox.removeWidget(QLabel)
+                    item = self.q_unrecognize.get()
                     imageLabel_img = item.findChild(QLabel, "image")
                     imageLabel_img.setPixmap(temp_pixmap)
-                    imageLabel_name = item.findChild(QPushButton, "name")
-                    imageLabel_name.setText(rec_name)
-                    imageLabel_id = item.findChild(QLabel, "id")
-                    imageLabel_id.setText(rec_name)
-                    imageLabel_rate = item.findChild(QLabel, "rate")
-                    # rec_rate = random.randint(70, 96)/100;
-                    imageLabel_rate.setText(str(round((0.03 - best_class_probabilities[0]) / 0.03, 2)))
-                    self.q_recognize.put(item)
+                    self.q_unrecognize.put(item)
+                else:
+                    pic_temp = self.img_stack.pop()
+                    vt_result = vt.classify_gray_hist(pic_temp, crop_img)
+                    if vt_result < 0.65:
+                        self.q_ready4rec.put(crop_img)
+                        self.temp_recongize()
+                        height, width = crop_img.shape[:2]
+                        temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
+                        temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
+                        # 加消息队列线程实现图片更新
+                        item = self.q_unrecognize.get()
+                        imageLabel_img = item.findChild(QLabel, "image")
+                        imageLabel_img.setPixmap(temp_pixmap)
+                        self.q_unrecognize.put(item)
+        return draw
+
+    def temp_recongize(self):
+        crop_img = self.q_ready4rec.get()
+        rec_name, best_class_probabilities = self.recognizeFace(
+                imutils.resize(crop_img, width=160))  # czg 调用facenet脸识别
+        crop_img = imutils.resize(crop_img, width=100)
+        height, width = crop_img.shape[:2]
+        temp_image = QImage(crop_img.flatten(), width, height, QImage.Format_RGB888)
+        temp_pixmap = QPixmap.fromImage(temp_image).scaled(img_w_dis, img_w_dis)
+        # 加消息队列线程实现图片更新
+        # self.imgeLabel_1.setPixmap(temp_pixmap)
+        item = self.q_recognize.get()
+        imageLabel_img = item.findChild(QLabel, "image")
+        imageLabel_img.setPixmap(temp_pixmap)
+        imageLabel_name1 = item.findChild(QPushButton, "name3")
+        imageLabel_name1.setText(rec_name[0])
+        imageLabel_rate1 = item.findChild(QLabel, "rate3")
+        imageLabel_rate1.setText(str(round((0.03 - best_class_probabilities[0]) / 0.03, 2)))
+        imageLabel_name2 = item.findChild(QPushButton, "name2")
+        imageLabel_name2.setText(rec_name[1])
+        imageLabel_rate2 = item.findChild(QLabel, "rate2")
+        imageLabel_rate2.setText(str(round((0.03 - best_class_probabilities[1]) / 0.03, 2)))
+        imageLabel_name3 = item.findChild(QPushButton, "name1")
+        imageLabel_name3.setText(rec_name[2])
+        imageLabel_rate3 = item.findChild(QLabel, "rate1")
+        imageLabel_rate3.setText(str(round((0.03 - best_class_probabilities[2]) / 0.03, 2)))
+        self.q_recognize.put(item)
 
     # 逻辑：播放识别
     def music(self, songs, frame):
@@ -688,7 +708,7 @@ if __name__ == "__main__":
     mw = MyWindow()
     lock = threading.Lock()
     mw.initNet(Pnet, Rnet, Onet, lock)
-    #mw.initFacenet()
+    mw.initFacenet()
     mw.set_video("east.mp4", MyWindow.VIDEO_TYPE_OFFLINE, False)
     mw.show()
     splash.finish(mw)
