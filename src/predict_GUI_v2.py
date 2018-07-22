@@ -8,25 +8,19 @@ import threading
 import time
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QWidget,QSplashScreen, QApplication, QGroupBox, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout
-from MTCNN import create_Kao_Onet, create_Kao_Rnet, create_Kao_Pnet
+from src.MTCNN import create_Kao_Onet, create_Kao_Rnet, create_Kao_Pnet
 import imutils
-import tools_matrix as tools
+import src.tools_matrix as tools
 import numpy as np
 from queue import Queue
 import tensorflow as tf
 import os
-import facenet
+import src.facenet
 import pickle
 import random
-import tools_matrix as tools
 import threading
-import align.detect_face
-from scipy import misc
-import validate_twopics as vt
-import dlib
-from rectangleDrawThread import rectangleThread
+import src.validate_twopics as vt
 
-songs = ['1.mp4', '2.mp4']
 img_w_dis = 150
 img_h_dis = 150
 click_lock = threading.Lock()
@@ -61,7 +55,6 @@ class MyWindow(QMainWindow):
         self.gridGroupBox = QGroupBox()
         self.gridGroupBox.setLayout(main_layout)
         self.setCentralWidget(self.gridGroupBox)
-        self.detector = dlib.get_frontal_face_detector()
         self.cameraConfig = cameraConfigDia()
         self.createStatusbar()
         self.createMenu()
@@ -276,16 +269,14 @@ class MyWindow(QMainWindow):
         if self.playCapture.isOpened():
             success, frame = self.playCapture.read()
             if success:
-
                 #frame = imutils.resize(frame, width=1000)
                 frame = imutils.resize(frame)
                 now = time.time()
                 if now - self.pre > 0.3:
-                    self.thread_it(self.music, songs, frame)
+                    self.thread_it(self.music, frame)
                     self.pre = now
                 start = time.time()
                 #cv2.imwrite('temp/' + str(time.time()) + '.jpg', frame)
-                #print(time.time() - start)
                 height, width = frame.shape[:2]
                 if frame.ndim == 3:
                     rgb = cvtColor(frame, COLOR_BGR2RGB)
@@ -335,24 +326,6 @@ class MyWindow(QMainWindow):
         self.status = (MyWindow.STATUS_PLAYING,
                        MyWindow.STATUS_PAUSE,
                        MyWindow.STATUS_PLAYING)[self.status]
-
-    def detectFace_dlib(self, img,detector):
-        dets = detector(img, 0)
-        rectangles = []
-        for i, d in enumerate(dets):  # 依次区分截图中的人脸
-            x1 = d.top() if d.top() > 0 else 0
-            y1 = d.bottom() if d.bottom() > 0 else 0
-            x2 = d.left() if d.left() > 0 else 0
-            y2 = d.right() if d.right() > 0 else 0
-            #img = cv2.rectangle(img, (x2, x1), (y2, y1), (255, 0, 0), 2)  # 人脸画框
-            face = img[x1:y1, x2:y2]
-            rectangle=[]
-            rectangle.append(x2)
-            rectangle.append(x1)
-            rectangle.append(y1)
-            rectangle.append(y2)
-            rectangles.append(rectangle)
-        return rectangles
 
 
     def detectFace(self, img,threshold):
@@ -565,11 +538,10 @@ class MyWindow(QMainWindow):
                     self.q_recognize.put(item)
 
     # 逻辑：播放识别
-    def music(self, songs, frame):
+    def music(self, frame):
         #cv2.imwrite('temp/' + str(time.time()) + '.jpg', frame)
         #self.lock.acquire()
         rectangles = self.detectFace(frame, self.threshold)
-        #rectangles = self.detectFace_dlib(frame,detector)
         frame = self.rectangleDraw(rectangles, frame)
         #self.lock.release()
     # 打包进线程（耗时的操作）
@@ -688,7 +660,7 @@ if __name__ == "__main__":
     mw = MyWindow()
     lock = threading.Lock()
     mw.initNet(Pnet, Rnet, Onet, lock)
-    #mw.initFacenet()
+    mw.initFacenet()
     mw.set_video("east.mp4", MyWindow.VIDEO_TYPE_OFFLINE, False)
     mw.show()
     splash.finish(mw)

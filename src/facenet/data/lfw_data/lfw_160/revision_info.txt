@@ -1,7 +1,0 @@
-arguments: align_dataset_mtcnn.py facenet/data/lfw_data/lfw facenet/data/lfw_data/lfw_160 --image_size 160 --margin 32 --random_order --gpu_memory_fraction 0.25
---------------------
-tensorflow version: 1.8.0
---------------------
-git hash: b''
---------------------
-b''
